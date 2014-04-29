@@ -1,3 +1,18 @@
+/*
+This example is the basic hello world program for the go mpi implementation.
+The program first initializes the mpi implementation and then finds its own rank.
+It then concurrently sends and receives messages from all other processes in
+the computation.
+
+To run:
+go get github.com/btracey/mpi
+go install github.com/btracey/mpi/examples/helloworld
+
+Then, in three different terminals, run one each of
+	helloworld -mpi-addr=":5000" -mpi-alladdr=":5000,:5001,:5003"
+	helloworld -mpi-addr=":5001" -mpi-alladdr=":5000,:5001,:5003"
+	helloworld -mpi-addr=":5003" -mpi-alladdr=":5000,:5001,:5003"
+*/
 package main
 
 import (
