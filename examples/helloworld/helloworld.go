@@ -4,8 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"mpi"
 	"sync"
+
+	"github.com/btracey/mpi"
 )
 
 func main() {
