@@ -4,7 +4,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -21,8 +20,6 @@ func main() {
 	nodelistStr := os.Getenv("SLURM_NODELIST")
 	nodelistFancy := strings.Split(nodelistStr, " ")
 
-	fmt.Println("node list str", nodelistStr)
-	fmt.Println("len fancy ", len(nodelistFancy))
 	var nodelist []string
 	// Next, we need to see if there is a range of nodes
 	for fancy := range nodelistFancy {
@@ -46,15 +43,11 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Println("lowind = ", lowInd)
-		fmt.Println("highind = ", highInd)
 		for i := lowInd; i < highInd+1; i++ {
 			nodeName := nodeRootName + strconv.Itoa(i)
 			nodelist = append(nodelist, nodeName)
 		}
 	}
-
-	fmt.Println("nodelist = ", nodelist)
 
 	fullNodelist := ""
 	for i := range nodelist {
@@ -64,26 +57,20 @@ func main() {
 		}
 	}
 
-	fmt.Println("full nodelist = ", nodelist)
-
 	wg := &sync.WaitGroup{}
 	wg.Add(len(nodelist))
 	for i := range nodelist {
-		fmt.Println("i in node", i)
 		go func(i int) {
-			fmt.Println("Started goroutine")
 			defer wg.Done()
 			args := []string{"-N1", os.Args[1]}
 			for i := 2; i < len(os.Args); i++ {
 				args = append(args, os.Args[i])
 			}
 			args = append(args, "-mpi-addr", nodelist[i]+":5000", "-mpi-alladdr", fullNodelist)
-			fmt.Println("launch on: ", nodelist[i])
 			cmd := exec.Command("srun", args...)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			cmd.Run()
-			fmt.Println("done executing on: ", nodelist[i])
 		}(i)
 	}
 	wg.Wait()
