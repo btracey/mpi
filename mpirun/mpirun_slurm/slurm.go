@@ -71,6 +71,7 @@ func main() {
 	for i := range nodelist {
 		fmt.Println("i in node", i)
 		go func(i int) {
+			fmt.Println("Started goroutine")
 			defer wg.Done()
 			args := []string{"-N1", os.Args[1]}
 			for i := 2; i < len(os.Args); i++ {
