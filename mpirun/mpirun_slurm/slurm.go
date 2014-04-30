@@ -15,9 +15,9 @@ import (
 
 func main() {
 	var nNodes int
-	flag.IntVar(&nNodes, "-n", 0, "number of nodes to use")
+	flag.IntVar(&nNodes, "n", 0, "number of nodes to use")
 	var nCores int
-	flag.IntVar(&nCores, "-c", 0, "number of cores to use")
+	flag.IntVar(&nCores, "c", 0, "number of cores to use")
 	flag.Parse()
 
 	if nNodes == 0 {
