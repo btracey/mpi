@@ -38,6 +38,9 @@ func main() {
 		strs = strings.Split(other, ",")
 		for _, sweepStr := range strs {
 			numStrs := strings.Split(sweepStr, "-")
+			if len(numStrs) == 1 {
+				nodelist = append(nodelist, numStrs[0])
+			}
 			// first element is a numbr
 			lowInd, err := strconv.Atoi(numStrs[0])
 			if err != nil {
