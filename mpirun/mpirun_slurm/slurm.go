@@ -22,6 +22,7 @@ func main() {
 	nodelistFancy := strings.Split(nodelistStr, " ")
 
 	fmt.Println("node list str", nodelistStr)
+	fmt.Println("len fancy ", len(nodelistFancy))
 	var nodelist []string
 	// Next, we need to see if there is a range of nodes
 	for i := range nodelistFancy {
@@ -47,7 +48,7 @@ func main() {
 		}
 		fmt.Println("lowind = ", lowInd)
 		fmt.Println("highind = ", highInd)
-		for i := lowInd; i < highInd; i++ {
+		for i := lowInd; i < highInd+1; i++ {
 			nodeName := nodeRootName + strconv.Itoa(i)
 			nodelist = append(nodelist, nodeName)
 		}
