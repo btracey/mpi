@@ -498,6 +498,11 @@ func (n *Network) Send(data interface{}, destination, tag int) error {
 	if err != nil {
 		return err
 	}
+	// Wait for confirmation that the send was received
+	err = n.wait(destination, tag)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -515,8 +520,8 @@ func (n *Network) confirmationReader(destination int) {
 	n.connections[destination].sendtags.Channel(m.Tag) <- m.Bytes
 }
 
-// Wait implements the Mpi function
-func (n *Network) Wait(destination, tag int) error {
+// wait waits for confirmation that the destination received send with the given tag
+func (n *Network) wait(destination, tag int) error {
 	// Wait for a receive from that tag, and then delete the tag to free it from
 	// reuse
 	if destination == n.myrank {

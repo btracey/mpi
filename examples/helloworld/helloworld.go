@@ -56,7 +56,6 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			mpi.Wait(i, 0)
 		}(i)
 	}
 	wg.Add(size)

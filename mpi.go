@@ -44,6 +44,8 @@
 //
 // By default, the Network protocol is used. See type documentation for behavior.
 //
+// All function calls are blocking. Use go's native concurrency (goroutines,
+// channels, and package sync) to achive non-blocking behavior.
 //
 // [1] http://www.mcs.anl.gov/research/projects/mpi/
 // [2] http://www.mpi-forum.org/docs/mpi-3.0/mpi30-report.pdf
@@ -60,6 +62,10 @@ func Register(mpi Mpi) {
 	// TODO: Provide check that Register is called no more than once
 	mpier = mpi
 }
+
+var (
+	isAllReducer bool
+)
 
 // Init initializes the communication network. Init must be called before any
 // other functions are called, and should only be called once during program
@@ -91,6 +97,17 @@ func Size() int {
 
 // Send transmits the data to the destination node with the given tag. Send may
 // be called concurrently between any number of goroutines, but {destination, tag}
+// pairs must be unique among concurrent calls to send. Once the call to send has
+// completed, the {destination, tag} pair may be reused
+func Send(data interface{}, destination, tag int) error {
+	return mpier.Send(data, destination, tag)
+}
+
+func AllReduce() {}
+
+/*
+// Send transmits the data to the destination node with the given tag. Send may
+// be called concurrently between any number of goroutines, but {destination, tag}
 // pairs must be unique among concurrent calls to send.
 // Send blocks until the data has been sent on connection, (thus data is again
 // free to be modified), but does not wait for confirmation of receiving of the
@@ -99,13 +116,16 @@ func Size() int {
 func Send(data interface{}, destination, tag int) error {
 	return mpier.Send(data, destination, tag)
 }
+*/
 
+/*
 // Wait blocks until confirmation from destination that the data sent with the
 // given tag has been received. Wait also frees the {destination, tag} pair for
 // re-use.
 func Wait(destination, tag int) error {
 	return mpier.Wait(destination, tag)
 }
+*/
 
 // Receive reads from the connection with source and deserializes the bytes into
 // data. Data should have the same type as send via send. Receive returns when
@@ -122,7 +142,6 @@ type Mpi interface {
 	Rank() int
 	Size() int
 	Send(data interface{}, destination, tag int) error
-	Wait(destination, tag int) error
 	Receive(data interface{}, source, tag int) error
 }
 
