@@ -39,7 +39,7 @@ func main() {
 	}
 	jobId := os.Getenv("SLURM_JOB_ID")
 
-	_, err = strconv.Itoa(jobId)
+	_, err = strconv.Atoi(jobId)
 	if err != nil {
 		log.Fatal("invalid jobId: ", jobId)
 	}
