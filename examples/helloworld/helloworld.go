@@ -50,7 +50,7 @@ func main() {
 			defer wg.Done()
 			str := fmt.Sprintf("\"Hello node %v, I'm node %v\"", i, rank)
 			if i == rank {
-				str = "\"Look, I'm talking to myself\""
+				str = "\"I'm just talking to myself\""
 			}
 			err := mpi.Send(str, i, 0)
 			if err != nil {
@@ -67,7 +67,7 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			fmt.Println("Received a message: ", str)
+			fmt.Printf("I, node %v, received a message: %v\n", rank, str)
 		}(i)
 	}
 	wg.Wait()
