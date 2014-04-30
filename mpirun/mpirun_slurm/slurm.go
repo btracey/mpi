@@ -34,10 +34,13 @@ func main() {
 
 	salloc := exec.Command("salloc", "-n", strconv.Itoa(nNodes), "-c", strconv.Itoa(nCores))
 	fmt.Println("salloc args are: ", salloc.Args)
+	salloc.Stdout = os.Stdout
+	salloc.Stderr = os.Stderr
 	err := salloc.Run()
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	time.Sleep(10 * time.Second)
 
 	jobId := os.Getenv("SLURM_JOB_ID")
