@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -18,11 +19,41 @@ func main() {
 	}
 	//progName := os.Args[1]
 	nodelistStr := os.Getenv("SLURM_NODELIST")
-	nodelist := strings.Split(nodelistStr, " ")
+	nodelistFancy := strings.Split(nodelistStr, " ")
+
+	var nodelist []string
+	// Next, we need to see if there is a range of nodes
+	for i := range nodelistFancy {
+		strs := strings.Split(nodelist[i], "[")
+		if len(strs) == 1 {
+			// No hyphen
+			nodelist = append(nodelist, strs[0])
+			continue
+		}
+		nodeRootName := strs[0]
+		// Otherwise, need to find the numbers on either side of the hyphen and append them
+		numStrs := strings.Split(strs[1], "-")
+		// first element is a numbr
+		lowInd, err := strconv.Atoi(numStrs[0])
+		if err != nil {
+			log.Fatal(err)
+		}
+		// High ind has a ] on teh end of it
+		highStr := strings.TrimSuffix(numstrs[1], "]")
+		highInd, err := strconv.Atoi(highStr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for i := lowInd; i < highInd; i++ {
+			nodeName := nodeRootName + strconv.Itoa(i)
+			nodelist = append(nodelist, nodeName)
+		}
+	}
+
 	fullNodelist := ""
 	for i := range nodelist {
 		fullNodelist += nodelist[i] + ":5000"
-		if i != len(nodelist) {
+		if i != len(nodelist)-1 {
 			fullNodelist += ","
 		}
 	}
