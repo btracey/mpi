@@ -40,6 +40,7 @@ func main() {
 			numStrs := strings.Split(sweepStr, "-")
 			if len(numStrs) == 1 {
 				nodelist = append(nodelist, numStrs[0])
+				continue
 			}
 			// first element is a numbr
 			lowInd, err := strconv.Atoi(numStrs[0])
