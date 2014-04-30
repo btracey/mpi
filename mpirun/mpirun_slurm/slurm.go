@@ -53,7 +53,10 @@ func main() {
 	fmt.Println("job id is ", jobId)
 
 	scancel := exec.Command("scancel", jobId)
-	defer scancel.Run()
+	defer func() {
+		fmt.Println("running scancel")
+		scancel.Run()
+	}()
 
 	if len(os.Args) == 1 {
 		log.Fatal("mpirun_slurm must be called with the program name")
