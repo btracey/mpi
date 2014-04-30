@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 func main() {
@@ -37,6 +38,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	time.Sleep(10 * time.Second)
+
 	jobId := os.Getenv("SLURM_JOB_ID")
 
 	_, err = strconv.Atoi(jobId)
