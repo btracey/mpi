@@ -60,9 +60,14 @@ func main() {
 		}
 	}
 
+	ports := make([]string, len(nodelist))
+	for i := range ports {
+		ports[i] = ":" + strconv.Itoa(5000+i)
+	}
+
 	fullNodelist := ""
 	for i := range nodelist {
-		fullNodelist += nodelist[i] + ":5000"
+		fullNodelist += nodelist[i] + ports[i]
 		if i != len(nodelist)-1 {
 			fullNodelist += ","
 		}
@@ -81,9 +86,7 @@ func main() {
 				args = append(args, os.Args[i])
 			}
 
-			port := 5000 + i
-
-			args = append(args, "-mpi-addr", nodelist[i]+":"+strconv.Itoa(port), "-mpi-alladdr", fullNodelist)
+			args = append(args, "-mpi-addr", nodelist[i]+":"+ports[i], "-mpi-alladdr", fullNodelist)
 			fmt.Println("args = ", args)
 			cmd := exec.Command("srun", args...)
 			cmd.Stdout = os.Stdout
