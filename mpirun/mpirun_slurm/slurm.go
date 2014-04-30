@@ -24,7 +24,7 @@ func main() {
 	var nodelist []string
 	// Next, we need to see if there is a range of nodes
 	for i := range nodelistFancy {
-		strs := strings.Split(nodelist[i], "[")
+		strs := strings.Split(nodelistFancy[i], "[")
 		if len(strs) == 1 {
 			// No hyphen
 			nodelist = append(nodelist, strs[0])
