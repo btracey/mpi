@@ -80,6 +80,8 @@ func main() {
 			args = append(args, "-mpi-addr", nodelist[i]+":5000", "-mpi-alladdr", fullNodelist)
 			fmt.Println("launch on: ", nodelist[i])
 			cmd := exec.Command("srun", args...)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
 			cmd.Run()
 			fmt.Println("done executing on: ", nodelist[i])
 		}(i)
