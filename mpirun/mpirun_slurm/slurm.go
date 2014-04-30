@@ -80,7 +80,10 @@ func main() {
 			for i := 2; i < len(os.Args); i++ {
 				args = append(args, os.Args[i])
 			}
-			args = append(args, "-mpi-addr", nodelist[i]+":5000", "-mpi-alladdr", fullNodelist)
+
+			port := 5000 + i
+
+			args = append(args, "-mpi-addr", nodelist[i]+":"+strconv.Itoa(port), "-mpi-alladdr", fullNodelist)
 			fmt.Println("args = ", args)
 			cmd := exec.Command("srun", args...)
 			cmd.Stdout = os.Stdout
