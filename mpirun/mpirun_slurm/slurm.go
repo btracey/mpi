@@ -28,12 +28,22 @@ func main() {
 		log.Fatal("c set to 0")
 	}
 
+	fmt.Println("nnodes = ", nNodes)
+	fmt.Println("ncores = ", nCores)
+
 	salloc := exec.Command("salloc", "-n", strconv.Itoa(nNodes), "-c", strconv.Itoa(nCores))
+	fmt.Println("salloc args are: ", salloc.Args)
 	err := salloc.Run()
 	if err != nil {
 		log.Fatal(err)
 	}
 	jobId := os.Getenv("SLURM_JOB_ID")
+
+	_, err = strconv.Itoa(jobId)
+	if err != nil {
+		log.Fatal("invalid jobId: ", jobId)
+	}
+
 	fmt.Println("job id is ", jobId)
 
 	scancel := exec.Command("scancel", jobId)
