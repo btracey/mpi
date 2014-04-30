@@ -83,4 +83,5 @@ func main() {
 			fmt.Println("done executing on: ", nodelist[i])
 		}(i)
 	}
+	wg.Wait()
 }
