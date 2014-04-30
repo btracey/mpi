@@ -40,12 +40,12 @@ func main() {
 		log.Fatal("Incorrect initialization")
 	}
 	size := mpi.Size()
-	fmt.Printf("Hello world, my rank is %v out of %v\n", rank, size)
+	fmt.Printf("Hello world, I'm node %v in a land with %v nodes\n", rank, size)
 
 	// Send and receive messages to and from everyone concurrently
 	wg := &sync.WaitGroup{}
 	wg.Add(size)
-	for i := 0; i < mpi.Size(); i++ {
+	for i := 0; i < size; i++ {
 		go func(i int) {
 			defer wg.Done()
 			str := fmt.Sprintf("\"Hello node %v, I'm node %v\"", i, rank)
@@ -59,7 +59,7 @@ func main() {
 		}(i)
 	}
 	wg.Add(size)
-	for i := 0; i < mpi.Size(); i++ {
+	for i := 0; i < size; i++ {
 		go func(i int) {
 			defer wg.Done()
 			var str string
@@ -71,5 +71,4 @@ func main() {
 		}(i)
 	}
 	wg.Wait()
-
 }
