@@ -5,6 +5,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -33,6 +34,7 @@ func main() {
 		log.Fatal(err)
 	}
 	jobId := os.Getenv("SLURM_JOB_ID")
+	fmt.Println("job id is ", jobId)
 
 	scancel := exec.Command("scancel", jobId)
 	defer scancel.Run()
