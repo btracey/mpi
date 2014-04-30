@@ -30,7 +30,7 @@ func main() {
 	wg := &sync.WaitGroup{}
 	wg.Add(len(nodelist))
 	for i := range nodelist {
-		go func(i) {
+		go func(i int) {
 			defer wg.Done()
 			args := []string{"-N1", os.Args[1]}
 			for i := 2; i < len(os.Args); i++ {
