@@ -5,59 +5,21 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 func main() {
-	var nNodes int
-	flag.IntVar(&nNodes, "n", 0, "number of nodes to use")
 	var nCores int
 	flag.IntVar(&nCores, "c", 0, "number of cores to use")
 	flag.Parse()
-
-	if nNodes == 0 {
-		log.Fatal("n set to 0")
-	}
 	if nCores == 0 {
 		log.Fatal("c set to 0")
 	}
-
-	fmt.Println("nnodes = ", nNodes)
-	fmt.Println("ncores = ", nCores)
-
-	salloc := exec.Command("salloc", "-n", strconv.Itoa(nNodes), "-c", strconv.Itoa(nCores))
-	fmt.Println("salloc args are: ", salloc.Args)
-	salloc.Stdout = os.Stdout
-	salloc.Stderr = os.Stderr
-	err := salloc.Run()
-	fmt.Println("finished salloc call")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	time.Sleep(10 * time.Second)
-
-	jobId := os.Getenv("SLURM_JOB_ID")
-
-	_, err = strconv.Atoi(jobId)
-	if err != nil {
-		log.Fatal("invalid jobId: ", jobId)
-	}
-
-	fmt.Println("job id is ", jobId)
-
-	scancel := exec.Command("scancel", jobId)
-	defer func() {
-		fmt.Println("running scancel")
-		scancel.Run()
-	}()
 
 	if len(os.Args) == 1 {
 		log.Fatal("mpirun_slurm must be called with the program name")
@@ -127,7 +89,7 @@ func main() {
 	for i := range nodelist {
 		go func(i int) {
 			defer wg.Done()
-			args := []string{"-N", "1", "-n", "1", "-c", "12", "--nodelist", nodelist[i], os.Args[1]}
+			args := []string{"-N", "1", "-n", "1", "-c", strconv.Itoa(nCores), "--nodelist", nodelist[i], os.Args[1]}
 			for i := 2; i < len(os.Args); i++ {
 				args = append(args, os.Args[i])
 			}
