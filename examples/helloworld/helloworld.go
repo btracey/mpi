@@ -53,6 +53,7 @@ func main() {
 			defer wg.Done()
 			str := fmt.Sprintf("\"Hello node %v, I'm node %v\"", i, rank)
 			if i == rank {
+				return // TODO: Fix self-send bug
 				str = "\"I'm just talking to myself\""
 			}
 			err := mpi.Send(str, i, 0)
@@ -65,6 +66,9 @@ func main() {
 	for i := 0; i < size; i++ {
 		go func(i int) {
 			defer wg.Done()
+			if i == rank {
+				return // TODO: Fix self-send bug
+			}
 			var str string
 			err := mpi.Receive(&str, i, 0)
 			if err != nil {
