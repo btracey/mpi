@@ -4,6 +4,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -62,6 +63,9 @@ func main() {
 			fullNodelist += ","
 		}
 	}
+
+	fmt.Println("nodelist = ", nodelist)
+	fmt.Println("fullNodelist = ", fullNodelist)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(len(nodelist))
