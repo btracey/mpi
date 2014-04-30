@@ -21,6 +21,7 @@ func main() {
 	nodelistStr := os.Getenv("SLURM_NODELIST")
 	nodelistFancy := strings.Split(nodelistStr, " ")
 
+	fmt.Println("node list str", nodelistStr)
 	var nodelist []string
 	// Next, we need to see if there is a range of nodes
 	for i := range nodelistFancy {
@@ -44,6 +45,8 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		fmt.Println("lowind = ", lowInd)
+		fmt.Println("highind = ", highInd)
 		for i := lowInd; i < highInd; i++ {
 			nodeName := nodeRootName + strconv.Itoa(i)
 			nodelist = append(nodelist, nodeName)
