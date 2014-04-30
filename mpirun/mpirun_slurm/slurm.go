@@ -39,7 +39,7 @@ func main() {
 			log.Fatal(err)
 		}
 		// High ind has a ] on teh end of it
-		highStr := strings.TrimSuffix(numstrs[1], "]")
+		highStr := strings.TrimSuffix(numStrs[1], "]")
 		highInd, err := strconv.Atoi(highStr)
 		if err != nil {
 			log.Fatal(err)
