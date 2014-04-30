@@ -19,12 +19,15 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"runtime"
 	"sync"
 
 	"github.com/btracey/mpi"
 )
 
 func main() {
+
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	// Parse must be called to set the addresses
 	flag.Parse()
 
