@@ -81,6 +81,7 @@ func main() {
 				args = append(args, os.Args[i])
 			}
 			args = append(args, "-mpi-addr", nodelist[i]+":5000", "-mpi-alladdr", fullNodelist)
+			fmt.Println("args = ", args)
 			cmd := exec.Command("srun", args...)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
