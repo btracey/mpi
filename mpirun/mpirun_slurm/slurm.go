@@ -37,6 +37,7 @@ func main() {
 	salloc.Stdout = os.Stdout
 	salloc.Stderr = os.Stderr
 	err := salloc.Run()
+	fmt.Println("finished salloc call")
 	if err != nil {
 		log.Fatal(err)
 	}
