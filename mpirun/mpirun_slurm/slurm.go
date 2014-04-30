@@ -54,6 +54,8 @@ func main() {
 		}
 	}
 
+	fmt.Println("nodelist = ", nodelist)
+
 	fullNodelist := ""
 	for i := range nodelist {
 		fullNodelist += nodelist[i] + ":5000"
@@ -62,9 +64,12 @@ func main() {
 		}
 	}
 
+	fmt.Println("full nodelist = ", nodelist)
+
 	wg := &sync.WaitGroup{}
 	wg.Add(len(nodelist))
 	for i := range nodelist {
+		fmt.Println("i in node", i)
 		go func(i int) {
 			defer wg.Done()
 			args := []string{"-N1", os.Args[1]}
