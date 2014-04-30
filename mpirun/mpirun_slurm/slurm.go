@@ -81,7 +81,7 @@ func main() {
 	for i := range nodelist {
 		go func(i int) {
 			defer wg.Done()
-			args := []string{"--nodes", "1", "--ntasks-per-node", "1", "--nodelist", nodelist[i], os.Args[1]}
+			args := []string{"-n", "1", "-c", "12", "--nodelist", nodelist[i], os.Args[1]}
 			for i := 2; i < len(os.Args); i++ {
 				args = append(args, os.Args[i])
 			}
