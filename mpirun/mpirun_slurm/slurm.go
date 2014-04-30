@@ -39,7 +39,7 @@ func main() {
 		for _, sweepStr := range strs {
 			numStrs := strings.Split(sweepStr, "-")
 			if len(numStrs) == 1 {
-				nodelist = append(nodelist, numStrs[0])
+				nodelist = append(nodelist, nodeRootName+numStrs[0])
 				continue
 			}
 			// first element is a numbr
