@@ -13,9 +13,32 @@ import (
 )
 
 func main() {
+	var nNodes int
+	flags.IntVar(&nNodes, "-n", 0, "number of nodes to use")
+	var nCores int
+	flags.IntVar(&nCores, "-c", 0, "number of cores to use")
+
+	if nNodes == 0 {
+		log.Fatal("n set to 0")
+	}
+	if nCores == 0 {
+		log.Fatal("c set to 0")
+	}
+
+	salloc := exec.Command("salloc", "-n", strconv.Itoa(nNodes), "-c", strconv.Itoa(nCores))
+	err := salloc.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+	jobId := os.Getenv("SLURM_JOB_ID")
+
+	scancel := exec.Command("scancel", jobId)
+	defer scancel.Run()
+
 	if len(os.Args) == 1 {
 		log.Fatal("mpirun_slurm must be called with the program name")
 	}
+
 	//progName := os.Args[1]
 	nodelistStr := os.Getenv("SLURM_JOB_NODELIST")
 	nodelistFancy := strings.Split(nodelistStr, " ")
