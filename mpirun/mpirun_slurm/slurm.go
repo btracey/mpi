@@ -25,7 +25,6 @@ func main() {
 		log.Fatal("mpirun_slurm must be called with the program name")
 	}
 
-	//progName := os.Args[1]
 	nodelistStr := os.Getenv("SLURM_JOB_NODELIST")
 	nodelistFancy := strings.Split(nodelistStr, " ")
 
@@ -81,9 +80,6 @@ func main() {
 		}
 	}
 
-	//fmt.Println("nodelist = ", nodelist)
-	//fmt.Println("fullNodelist = ", fullNodelist)
-
 	wg := &sync.WaitGroup{}
 	wg.Add(len(nodelist))
 	for i := range nodelist {
@@ -95,7 +91,6 @@ func main() {
 			}
 
 			args = append(args, "-mpi-addr", nodelist[i]+ports[i], "-mpi-alladdr", fullNodelist)
-			//fmt.Println("args = ", args)
 			cmd := exec.Command("srun", args...)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
