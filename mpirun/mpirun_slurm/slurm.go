@@ -17,7 +17,7 @@ func main() {
 		log.Fatal("mpirun_slurm must be called with the program name")
 	}
 	//progName := os.Args[1]
-	nodelistStr := os.Getenv("SLURM_NODELIST")
+	nodelistStr := os.Getenv("SLURM_JOB_NODELIST")
 	nodelistFancy := strings.Split(nodelistStr, " ")
 
 	var nodelist []string
@@ -29,23 +29,29 @@ func main() {
 			nodelist = append(nodelist, strs[0])
 			continue
 		}
-		nodeRootName := strs[0]
 		// Otherwise, need to find the numbers on either side of the hyphen and append them
-		numStrs := strings.Split(strs[1], "-")
-		// first element is a numbr
-		lowInd, err := strconv.Atoi(numStrs[0])
-		if err != nil {
-			log.Fatal(err)
-		}
-		// High ind has a ] on teh end of it
-		highStr := strings.TrimSuffix(numStrs[1], "]")
-		highInd, err := strconv.Atoi(highStr)
-		if err != nil {
-			log.Fatal(err)
-		}
-		for i := lowInd; i < highInd+1; i++ {
-			nodeName := nodeRootName + strconv.Itoa(i)
-			nodelist = append(nodelist, nodeName)
+		nodeRootName := strs[0]
+		other := strs[1]
+		other = strings.TrimSuffix(other, "]")
+		// Now, split at all of the commas again
+		strs = strings.Split(other, ",")
+		for _, sweepStr := range strs {
+			numStrs := strings.Split(sweepStr, "-")
+			// first element is a numbr
+			lowInd, err := strconv.Atoi(numStrs[0])
+			if err != nil {
+				log.Fatal(err)
+			}
+			// High ind has a ] on teh end of it
+			highStr := strings.TrimSuffix(numStrs[1], "]")
+			highInd, err := strconv.Atoi(highStr)
+			if err != nil {
+				log.Fatal(err)
+			}
+			for i := lowInd; i < highInd+1; i++ {
+				nodeName := nodeRootName + strconv.Itoa(i)
+				nodelist = append(nodelist, nodeName)
+			}
 		}
 	}
 
