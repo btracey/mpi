@@ -180,7 +180,7 @@ func (n *Network) Init() error {
 
 	// Check that the local address is one of the addresses
 	if !(n.myrank < len(n.Addrs) && n.Addrs[n.myrank] == n.Addr) {
-		return errors.New("mpi init: local ip address not in global list")
+		return fmt.Errorf("mpi init: local ip address not in global list. Local address is: %v, global list is %v", n.myrank, n.Addrs)
 	}
 
 	n.nNodes = len(n.Addrs)

@@ -53,14 +53,17 @@ package mpi
 
 import "fmt"
 
-var mpier Mpi = &Network{}
+var mpier Interface = &Network{}
 var registerCalled bool
 
 // Register sets an Mpi implementation to be used in calls to MPI. Register
-// should normally be called during program initialization and not again.
-func Register(mpi Mpi) {
-	// TODO: Provide check that Register is called no more than once
+// should be called exactly once during program initialization.
+func Register(mpi Interface) {
 	mpier = mpi
+	if registerCalled {
+		panic("register called more than once")
+	}
+	registerCalled = true
 }
 
 var (
@@ -103,7 +106,7 @@ func Send(data interface{}, destination, tag int) error {
 	return mpier.Send(data, destination, tag)
 }
 
-func AllReduce() {}
+//func AllReduce() {}
 
 /*
 // Send transmits the data to the destination node with the given tag. Send may
@@ -136,7 +139,7 @@ func Receive(data interface{}, source, tag int) error {
 
 // Mpi is a set of routines for performing parallel computation. See the
 // function descriptions for documentation.
-type Mpi interface {
+type Interface interface {
 	Init() error
 	Finalize()
 	Rank() int
