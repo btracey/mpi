@@ -15,7 +15,7 @@ import (
 // package in the standard library. Net creates an all-to-all connection using
 // specified nework protocol among all provided IP addresses. Network uses
 // encoding/gob for (de)serialization, and so some network protocols may not
-// be appropriate. While (at present) Network is not build with security in mind,
+// be appropriate. While (at present) Network is not built with security in mind,
 // the network does confirm that the provided password is the
 // same before accepting any connection. At some point, the Password will be put through
 // a hash function, but that is not yet implemented
@@ -83,7 +83,7 @@ func (l *localConnection) Delete(tag int) {
 	l.mux.Unlock()
 }
 
-// tagMap is used to manage tagged messages
+// tagManager is used to manage tagged messages
 type tagManager struct {
 	CommMap map[int]chan []byte
 	Mux     *sync.Mutex
@@ -185,18 +185,7 @@ func (n *Network) Init() error {
 
 	n.nNodes = len(n.Addrs)
 
-	err := n.startConnections()
-	if err != nil {
-		return err
-	}
-
-	/*
-		dialBuf := make([]byte, 0, 1000)
-		listenBuf := make([]byte, 0, 1000)
-		n.connections[n.myrank].dial = &localConn{bytes.NewBuffer(dialBuf), 0, 0}
-		n.connections[n.myrank].listen = &localConn{bytes.NewBuffer(dialBuf), 0, 0}
-	*/
-	return nil
+	return n.startConnections()
 }
 
 func (n *Network) startConnections() error {
