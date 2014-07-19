@@ -12,7 +12,7 @@ parallelism should be set in the program itself using runtime.GOMAXPROCS.
 
 Instructions:
 	go get github.com/btracey/mpi/mpirun/gompirun
-	gompirun programname 8 -otherflag=value
+	gompirun 8 programname -otherflag=value
 */
 
 package main
@@ -29,12 +29,12 @@ func main() {
 	if len(os.Args) < 3 {
 		log.Fatal("less than two arguments, must have at least executable and number of nodes ")
 	}
-
-	execName := os.Args[1]
-	nNodes, err := strconv.Atoi(os.Args[2])
+	nNodes, err := strconv.Atoi(os.Args[1])
 	if err != nil {
 		log.Fatal("error parsing nNodes: ", err)
 	}
+
+	execName := os.Args[2]
 
 	otherArgs := os.Args[3:]
 
@@ -66,8 +66,11 @@ func launch(execName string, ports []string, args []string) {
 		go func(i int, port string) {
 			defer wg.Done()
 
-			a := []string{"-mpi-addr", port, "-mpi-alladdr", portlist}
-			a = append(a, args...)
+			var a []string
+			for _, v := range args {
+				a = append(a, v)
+			}
+			a = append(a, "-mpi-addr", port, "-mpi-alladdr", portlist)
 			cmd := exec.Command(execName, a...)
 			cmd.Stdin = os.Stdin
 			cmd.Stdout = os.Stdout
