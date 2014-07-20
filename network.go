@@ -49,98 +49,6 @@ func (n *Network) Size() int {
 	return n.nNodes
 }
 
-type localConnection struct {
-	manager    *tagManager
-	storedData map[int][]byte
-	mux        *sync.Mutex
-}
-
-func (l *localConnection) AddBytes(tag int, b []byte) error {
-	err := l.manager.Add(tag)
-	if err != nil {
-		return err
-	}
-	l.mux.Lock()
-	l.storedData[tag] = b
-	l.mux.Unlock()
-	return nil
-}
-
-func (l *localConnection) Bytes(tag int) ([]byte, error) {
-	l.mux.Lock()
-	b, ok := l.storedData[tag]
-	l.mux.Unlock()
-	if !ok {
-		return nil, errors.New("Unknown tag")
-	}
-	return b, nil
-}
-
-func (l *localConnection) Delete(tag int) {
-	l.manager.Delete(tag)
-	l.mux.Lock()
-	delete(l.storedData, tag)
-	l.mux.Unlock()
-}
-
-// tagManager is used to manage tagged messages
-type tagManager struct {
-	CommMap map[int]chan []byte
-	Mux     *sync.Mutex
-}
-
-func newTagManager() *tagManager {
-	return &tagManager{
-		CommMap: make(map[int]chan []byte),
-		Mux:     &sync.Mutex{},
-	}
-}
-
-// adds a tag to the map, returning an error if the tag already exists. Uses
-// a mutex to be thread safe
-func (t *tagManager) Add(tag int) error {
-	t.Mux.Lock()
-	defer t.Mux.Unlock()
-	_, ok := t.CommMap[tag]
-	if ok {
-		return TagExists{Tag: tag}
-	}
-	t.CommMap[tag] = make(chan []byte)
-	return nil
-}
-
-// Delete removes the tag from the map
-func (t *tagManager) Delete(tag int) {
-	t.Mux.Lock()
-	defer t.Mux.Unlock()
-	// TODO: Remove this once we're sure the implementation is correct
-	_, ok := t.CommMap[tag]
-	if !ok {
-		panic("attempt to delete non-existant key")
-	}
-	delete(t.CommMap, tag)
-}
-
-// Channel returns the channel for that tag
-func (t *tagManager) Channel(tag int) chan []byte {
-	t.Mux.Lock()
-	defer t.Mux.Unlock()
-	// TODO: Remove this once we're sure the implementation is correct
-	_, ok := t.CommMap[tag]
-	if !ok {
-		panic("attempt to return chan from non-existant tag")
-	}
-	c := t.CommMap[tag]
-	return c
-}
-
-type pairwiseConnection struct {
-	dial        net.Conn // Send on
-	listen      net.Conn // Receive from
-	receivetags *tagManager
-	sendtags    *tagManager
-}
-
 // Init implements the Mpi init function
 func (n *Network) Init() error {
 	n.setFields()
@@ -261,11 +169,11 @@ func (n *Network) establishListenConnections() error {
 	connErr := make([]error, n.nNodes)
 	wg := &sync.WaitGroup{}
 
+	wg.Add(n.nNodes - 1)
 	for i := 0; i < n.nNodes; i++ {
 		if i == n.myrank {
 			continue // Don't listen to yourself
 		}
-		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
 			connErr[i] = n.listenHandshake(listener)
@@ -350,72 +258,26 @@ func (n *Network) listenHandshake(listener net.Listener) error {
 			Password: n.hashedPassword,
 			Id:       n.myrank,
 		})
-
 }
 
 func (n *Network) establishDialConnections() error {
 	// Each program also dials every other program
-	connectionError := make([]error, n.nNodes)
+	connErr := make([]error, n.nNodes)
 	wg := &sync.WaitGroup{}
 	wg.Add(n.nNodes - 1)
 	for i := 0; i < n.nNodes; i++ {
 		if i == n.myrank {
 			continue // Don't dial yourself
 		}
-
-		// Do all of the dialing concurrently
 		go func(i int) {
-			defer func() {
-				wg.Done()
-			}()
-
-			// Keep dialing every 0.3s until a connection is reached
-
-			var conn net.Conn
-			var err error
-			t := time.Now()
-			for {
-				// TODO: Make this a ticker
-				conn, err = net.DialTimeout(n.NetProto, n.Addrs[i], n.Timeout)
-				if err == nil || (n.Timeout > 0 && time.Since(t) > n.Timeout) {
-					break
-				}
-				time.Sleep(300 * time.Millisecond)
-			}
-			if err != nil {
-				connectionError[i] = err
-				return
-			}
-
-			// Established the connection, send the first handshake message
-			encoder := gob.NewEncoder(conn)
-			err = encoder.Encode(initialMessage{
-				Password: n.hashedPassword,
-				Id:       n.myrank,
-			})
-
-			if err != nil {
-				connectionError[i] = err
-				return
-			}
-
-			// Recieve the handshake message back
-			decoder := gob.NewDecoder(conn)
-			var message initialMessage
-			decoder.Decode(&message)
-			id, err := n.passwordAndId(message)
-			if err != nil {
-				connectionError[i] = err
-				return
-			}
-			n.connections[id].dial = conn
-			return
+			defer wg.Done()
+			connErr[i] = n.dialHandshake(i)
 		}(i)
 	}
 	wg.Wait()
 
 	var str string
-	for _, err := range connectionError {
+	for _, err := range connErr {
 		if err != nil {
 			str += " " + err.Error()
 		}
@@ -427,15 +289,59 @@ func (n *Network) establishDialConnections() error {
 	return nil
 }
 
+// dialHandshake dials the ith node in the network and waits for a confirmation
+// message. If the node isn't immediately available, the code retries at regular
+// intervals until timeout
+func (n *Network) dialHandshake(i int) error {
+	interval := 100 * time.Millisecond
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	var conn net.Conn
+	var err error
+	start := time.Now()
+
+	// range until connection is established or too much time has elapsed
+	for _ = range ticker.C {
+		conn, err = net.DialTimeout(n.NetProto, n.Addrs[i], n.Timeout)
+		if err == nil || (n.Timeout > 0 && time.Since(start) > n.Timeout) {
+			break
+		}
+	}
+	if err != nil {
+		return err
+	}
+
+	// Established the connection, send the first handshake message
+	err = gob.NewEncoder(conn).Encode(initialMessage{
+		Password: n.hashedPassword,
+		Id:       n.myrank,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Recieve the handshake message back and verify the password matches
+	var message initialMessage
+	err = gob.NewDecoder(conn).Decode(&message)
+	if err != nil {
+		return err
+	}
+
+	id, err := n.passwordAndId(message)
+	if err != nil {
+		return err
+	}
+	n.connections[id].dial = conn
+	return nil
+}
+
 // Checks that the password matches what the network expects and that the
 // id is valid
 func (n *Network) passwordAndId(message initialMessage) (int, error) {
-	// Check that the password matches
 	if message.Password != n.hashedPassword {
 		return -1, errors.New("bad password")
 	}
-
-	// Check that the node ID makes sense
 	if message.Id >= n.nNodes || message.Id < 0 || message.Id == n.myrank {
 		return -1, fmt.Errorf("bad id: %v", message.Id)
 	}
@@ -458,6 +364,98 @@ func (n *Network) close() {
 			conn.listen.Close()
 		}
 	}
+}
+
+type localConnection struct {
+	manager    *tagManager
+	storedData map[int][]byte
+	mux        *sync.Mutex
+}
+
+func (l *localConnection) AddBytes(tag int, b []byte) error {
+	err := l.manager.Add(tag)
+	if err != nil {
+		return err
+	}
+	l.mux.Lock()
+	l.storedData[tag] = b
+	l.mux.Unlock()
+	return nil
+}
+
+func (l *localConnection) Bytes(tag int) ([]byte, error) {
+	l.mux.Lock()
+	b, ok := l.storedData[tag]
+	l.mux.Unlock()
+	if !ok {
+		return nil, errors.New("Unknown tag")
+	}
+	return b, nil
+}
+
+func (l *localConnection) Delete(tag int) {
+	l.manager.Delete(tag)
+	l.mux.Lock()
+	delete(l.storedData, tag)
+	l.mux.Unlock()
+}
+
+// tagManager is used to manage tagged messages
+type tagManager struct {
+	CommMap map[int]chan []byte
+	Mux     *sync.Mutex
+}
+
+func newTagManager() *tagManager {
+	return &tagManager{
+		CommMap: make(map[int]chan []byte),
+		Mux:     &sync.Mutex{},
+	}
+}
+
+// adds a tag to the map, returning an error if the tag already exists. Uses
+// a mutex to be thread safe
+func (t *tagManager) Add(tag int) error {
+	t.Mux.Lock()
+	defer t.Mux.Unlock()
+	_, ok := t.CommMap[tag]
+	if ok {
+		return TagExists{Tag: tag}
+	}
+	t.CommMap[tag] = make(chan []byte)
+	return nil
+}
+
+// Delete removes the tag from the map
+func (t *tagManager) Delete(tag int) {
+	t.Mux.Lock()
+	defer t.Mux.Unlock()
+	// TODO: Remove this once we're sure the implementation is correct
+	_, ok := t.CommMap[tag]
+	if !ok {
+		panic("attempt to delete non-existant key")
+	}
+	delete(t.CommMap, tag)
+}
+
+// Channel returns the channel for that tag
+func (t *tagManager) Channel(tag int) chan []byte {
+	t.Mux.Lock()
+	defer t.Mux.Unlock()
+	// TODO: Remove this once we're sure the implementation is correct
+	_, ok := t.CommMap[tag]
+	if !ok {
+		panic("attempt to return chan from non-existant tag")
+	}
+	c := t.CommMap[tag]
+	return c
+}
+
+type pairwiseConnection struct {
+	dial        net.Conn // Send on
+	listen      net.Conn // Receive from
+	receivetags *tagManager
+	sendtags    *tagManager
 }
 
 // message to send over the wire
