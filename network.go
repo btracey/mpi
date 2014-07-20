@@ -348,7 +348,7 @@ func (n *Network) passwordAndId(message initialMessage) (int, error) {
 	return message.Id, nil
 }
 
-// Finalize implements the Mpi init function
+// Finalize implements mpi.Interface.Finalize
 func (n *Network) Finalize() {
 	n.close()
 }
@@ -373,10 +373,7 @@ type localConnection struct {
 }
 
 func (l *localConnection) AddBytes(tag int, b []byte) error {
-	err := l.manager.Add(tag)
-	if err != nil {
-		return err
-	}
+	l.manager.Register(tag)
 	l.mux.Lock()
 	l.storedData[tag] = b
 	l.mux.Unlock()
@@ -413,17 +410,17 @@ func newTagManager() *tagManager {
 	}
 }
 
-// adds a tag to the map, returning an error if the tag already exists. Uses
-// a mutex to be thread safe
-func (t *tagManager) Add(tag int) error {
+// Register adds a tag to the list of used tags and creates a communication
+// channel. This allows messages to be sent to the correct goroutines even though
+// multiple sends may be happening on the same channel at the same time.
+func (t *tagManager) Register(tag int) {
 	t.Mux.Lock()
 	defer t.Mux.Unlock()
 	_, ok := t.CommMap[tag]
 	if ok {
-		return TagExists{Tag: tag}
+		panic(fmt.Sprintf("tag %d already exists on the connection", tag))
 	}
 	t.CommMap[tag] = make(chan []byte)
-	return nil
 }
 
 // Delete removes the tag from the map
@@ -451,87 +448,82 @@ func (t *tagManager) Channel(tag int) chan []byte {
 	return c
 }
 
+// a pairwiseConnection is a manager for the data going between two nodes in
+// the network
 type pairwiseConnection struct {
-	dial        net.Conn // Send on
-	listen      net.Conn // Receive from
-	receivetags *tagManager
-	sendtags    *tagManager
+	dial        net.Conn    // Connection on which to send data
+	listen      net.Conn    // Receive on which to receive data (and send confirmation message)
+	receivetags *tagManager // tags on the send connection
+	sendtags    *tagManager // tags on the receive connection
 }
 
 // message to send over the wire
+// message is of type {int, []byte} so we know the type of the data
+// when deserializing
 type message struct {
 	Tag   int
 	Bytes []byte
 }
 
-type localMap map[int][]byte
-
-// Send implements the Mpi function
+// Send implements mpi.Interface.Send. Network uses the encoding/gob package to
+// serialize data.
 func (n *Network) Send(data interface{}, destination, tag int) error {
 
-	// Send serializes the data using gob, and then encodes the tag and the
-	// bytes. message is not of type {int, interface{}} because then we couldn't
-	// deserialize without knowing the type, which would make concurrent sends
-	// impossible
+	/*
+		Implementation comments:
+		The mpi.Interface.Send specifies that sends between two nodes may happen
+		concurrently as long as the tags are unique. These concurrent sends may
+		have different data types, but the program must know the type of data in
+		order to decode from the communication channel. The solution to this is
+		to serialize all of the data into a []byte, and to only send the "message"
+		type over the channel. Gob can decode the message, observe the tag, and
+		pass along the []byte to receive for further decoding. When Registering
+		the tag, the tagManager also creates a communication channel to do the
+		forwarding once the tag is observed.
+	*/
 
+	// register the tag for this message
+	n.connections[destination].sendtags.Register(tag)
+
+	// serialize the data into a []byte
 	var buf bytes.Buffer
-	encoder := gob.NewEncoder(&buf)
-	err := encoder.Encode(data)
+	err := gob.NewEncoder(&buf).Encode(data)
 	if err != nil {
 		return err
 	}
 
+	// special case if sending locally
 	if destination == n.myrank {
 		n.local.AddBytes(tag, buf.Bytes())
 		return nil
 	}
 
-	err = n.connections[destination].sendtags.Add(tag)
-	if err != nil {
-		return err
-	}
-
+	// Launch a reader for the reply message from the destination
 	go n.confirmationReader(destination)
 
+	// send the data over the connection.
 	enc := gob.NewEncoder(n.connections[destination].dial)
 	err = enc.Encode(message{Tag: tag, Bytes: buf.Bytes()})
 	if err != nil {
 		return err
 	}
-	// Wait for confirmation that the send was received
-	err = n.wait(destination, tag)
-	if err != nil {
-		return err
-	}
-	return nil
-}
 
-// launchConfirmationReader launches a goroutine that reads for the confirmation
-// of a received message. When confirmation is received, it will send empty bytes
-// on the channel of the correct goroutine
-func (n *Network) confirmationReader(destination int) {
-	var m message
-	decoder := gob.NewDecoder(n.connections[destination].dial)
-	err := decoder.Decode(&m)
-	if err != nil {
-		panic(err)
-	}
-	// Send a signal to the channel of this tag
-	n.connections[destination].sendtags.Channel(m.Tag) <- m.Bytes
-}
-
-// wait waits for confirmation that the destination received send with the given tag
-func (n *Network) wait(destination, tag int) error {
-	// Wait for a receive from that tag, and then delete the tag to free it from
-	// reuse
-	if destination == n.myrank {
-		<-n.local.manager.Channel(tag)
-		n.local.Delete(tag)
-		return nil
-	}
+	// Wait for the confirmation message and then delete the tag
 	<-n.connections[destination].sendtags.Channel(tag)
 	n.connections[destination].sendtags.Delete(tag)
 	return nil
+}
+
+// confirmationReader reads a reply from the send channel and forwards the data
+// to the appropriate channel.
+func (n *Network) confirmationReader(destination int) {
+	var m message
+	err := gob.NewDecoder(n.connections[destination].dial).Decode(&m)
+	if err != nil {
+		panic(err) // There should never be a send over the connection that isn't a message
+	}
+
+	n.connections[destination].sendtags.Channel(m.Tag) <- m.Bytes
 }
 
 // Receive implements the Mpi function
@@ -553,10 +545,7 @@ func (n *Network) Receive(data interface{}, source, tag int) error {
 			n.local.manager.Channel(tag) <- []byte{}
 		}(tag)
 	} else {
-		err := manager.Add(tag)
-		if err != nil {
-			return err
-		}
+		manager.Register(tag)
 
 		go n.receiveReader(source) // decoupled because there may be concurrent sends
 

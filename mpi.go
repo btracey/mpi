@@ -99,9 +99,10 @@ func Size() int {
 }
 
 // Send transmits the data to the destination node with the given tag. Send may
-// be called concurrently between any number of goroutines, but {destination, tag}
+// be called concurrently by any number of goroutines, but {destination, tag}
 // pairs must be unique among concurrent calls to send. Once the call to send has
-// completed, the {destination, tag} pair may be reused
+// completed, the {destination, tag} pair may be reused. If the pairs are not
+// unique, the client may panic.
 func Send(data interface{}, destination, tag int) error {
 	return mpier.Send(data, destination, tag)
 }
