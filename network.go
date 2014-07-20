@@ -24,7 +24,7 @@ import (
 // if the zero values are present for the network values.
 type Network struct {
 	NetProto string        // Which network protocol to use (see net package for options)
-	Addr     string        // Ip address of the local process
+	Addr     string        // Network address of the local process
 	Addrs    []string      // List of the addresses of all nodes. Addr must be among them
 	Timeout  time.Duration // If set, Init fail if the connections are not made within the duration
 
@@ -144,7 +144,7 @@ type pairwiseConnection struct {
 // Init implements the Mpi init function
 func (n *Network) Init() error {
 	n.setFields()
-	err := n.setRanks()
+	err := n.assignRanks()
 	if err != nil {
 		return err
 	}
@@ -176,22 +176,17 @@ func (n *Network) setFields() {
 	n.hashedPassword = n.Password // TODO: Fix
 }
 
-func (n *Network) setRanks() error {
-	// Sort all of the IPs to ensure that all processors agree on the node
-	// number of each adress
+// assignRanks gives each node in the network a unique rank in a way such that
+// all processors will agree on the ranks of each node
+func (n *Network) assignRanks() error {
 	sort.Strings(n.Addrs)
 
-	// Make sure all of the IP addresses are unique
-	for i := 0; i < len(n.Addrs)-1; i++ {
-		if n.Addrs[i] == n.Addrs[i+1] {
-			return errors.New("ip addresses not unique")
-		}
+	if !uniqueAddrs(n.Addrs) {
+		return fmt.Errorf("network addresses not unique. list is: ", n.Addrs)
 	}
 
-	// Rank is the order in the list
 	n.myrank = sort.SearchStrings(n.Addrs, n.Addr)
 
-	// Check that the local address is one of the addresses
 	if !(n.myrank < len(n.Addrs) && n.Addrs[n.myrank] == n.Addr) {
 		return fmt.Errorf("mpi init: local ip address not in global list. Local address is: %v, global list is %v", n.myrank, n.Addrs)
 	}
@@ -200,16 +195,26 @@ func (n *Network) setRanks() error {
 	return nil
 }
 
+func uniqueAddrs(addrs []string) bool {
+	for i := 0; i < len(addrs)-1; i++ {
+		if addrs[i] == addrs[i+1] {
+			return false
+		}
+	}
+	return true
+}
+
+// startConnections creates two-way all-to-all connections. Each node will
+// dial all of the other nodes in the network and listen for their dials
 func (n *Network) startConnections() error {
-	// Create bi-way all-to-all connections. Listen for all of the codes and then
-	// dial all of the codes
 	n.connections = make([]*pairwiseConnection, n.nNodes)
 	for i := range n.connections {
-		con := &pairwiseConnection{}
-		con.receivetags = newTagManager()
-		con.sendtags = newTagManager()
-		n.connections[i] = con
+		n.connections[i] = &pairwiseConnection{
+			receivetags: newTagManager(),
+			sendtags:    newTagManager(),
+		}
 	}
+
 	n.local = &localConnection{
 		manager:    newTagManager(),
 		storedData: make(map[int][]byte),
@@ -222,13 +227,13 @@ func (n *Network) startConnections() error {
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 	go func() {
+		defer wg.Done()
 		listenError = n.establishListenConnections()
-		wg.Done()
 	}()
 
 	go func() {
+		defer wg.Done()
 		dialError = n.establishDialConnections()
-		wg.Done()
 	}()
 
 	wg.Wait()
@@ -244,17 +249,8 @@ func (n *Network) startConnections() error {
 	return nil
 }
 
-type initialMessage struct {
-	Password string // Password for
-	Id       int    // Node
-}
-
-type listConn struct {
-	conn net.Conn
-	err  error
-}
-
-// establishListenConnections listens for all of the other nodes
+// establishListenConnections listens on the address of this node for dials
+// from of the other nodes
 func (n *Network) establishListenConnections() error {
 	// Listen on the local IP address for calls from the other processes
 	listener, err := net.Listen(n.NetProto, n.Addr)
@@ -269,77 +265,15 @@ func (n *Network) establishListenConnections() error {
 		if i == n.myrank {
 			continue // Don't listen to yourself
 		}
-
-		// We need to be able to timeout the listener if the user requests (so
-		// programs don't freeze if the all-to-all connection can't happen)
-		// Launch listener in its own goroutine and use channels to manage the
-		// timeout
-
-		acceptChan := make(chan listConn)
-
-		go func() {
-			conn, err := listener.Accept()
-			if err != nil {
-				connErr[i] = errors.New("error accepting: " + err.Error())
-			}
-			acceptChan <- listConn{conn, err}
-		}()
-
-		var list listConn
-
-		if n.Timeout > 0 {
-			timer := time.NewTimer(n.Timeout)
-			select {
-			case list = <-acceptChan:
-			case <-timer.C:
-				list = listConn{
-					err: errors.New("listener timed out"),
-				}
-			}
-		} else {
-			list = <-acceptChan
-		}
-
-		conn := list.conn
-		err = list.err
-		if err != nil {
-			// All-to-all needs to happen, so if there's an error break
-			connErr[i] = err
-			break
-		}
-
-		wg.Add(1) // Add one at a time in case the timeouts above break
-		go func(i int, conn net.Conn) {
+		wg.Add(1)
+		go func(i int) {
 			defer wg.Done()
-			// Decode an initialMessage
-			var message initialMessage
-			decoder := gob.NewDecoder(conn)
-
-			err := decoder.Decode(&message)
-			if err != nil {
-				connErr[i] = err
-				return
-			}
-
-			id, err := n.passwordAndId(message)
-			if err != nil {
-				connErr[i] = err
-				return
-			}
-
-			n.connections[id].listen = conn
-
-			// Send back a handshake the other way
-			encoder := gob.NewEncoder(conn)
-			encoder.Encode(initialMessage{
-				Password: n.hashedPassword,
-				Id:       n.myrank,
-			})
-			return
-		}(i, conn)
+			connErr[i] = n.listenHandshake(listener)
+		}(i)
 	}
 	wg.Wait()
 
+	// Combine the errors if there were any
 	var str string
 	for _, err := range connErr {
 		if err != nil {
@@ -350,6 +284,73 @@ func (n *Network) establishListenConnections() error {
 		return errors.New(str)
 	}
 	return nil
+}
+
+type initialMessage struct {
+	Password string // Password for
+	Id       int    // Node
+}
+
+type listConn struct {
+	conn net.Conn
+	err  error
+}
+
+// listenHandshake accepts an incoming message from another node in the network
+// and responds that the message was received. There is a timeout of the user
+// requested one
+func (n *Network) listenHandshake(listener net.Listener) error {
+
+	acceptChan := make(chan listConn)
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			err = errors.New("error accepting: " + err.Error())
+		}
+		acceptChan <- listConn{conn, err}
+	}()
+
+	var list listConn
+	if n.Timeout > 0 {
+		timer := time.NewTimer(n.Timeout)
+		select {
+		case list = <-acceptChan:
+		case <-timer.C:
+			list = listConn{
+				err: errors.New("listener timed out"),
+			}
+		}
+	} else {
+		list = <-acceptChan
+	}
+
+	if list.err != nil {
+		return list.err
+	}
+
+	conn := list.conn
+	decoder := gob.NewDecoder(conn)
+
+	var message initialMessage
+	err := decoder.Decode(&message)
+	if err != nil {
+		return err
+	}
+
+	id, err := n.passwordAndId(message)
+	if err != nil {
+		return err
+	}
+
+	n.connections[id].listen = conn
+
+	// Send back a handshake the other way
+	return gob.NewEncoder(conn).Encode(
+		initialMessage{
+			Password: n.hashedPassword,
+			Id:       n.myrank,
+		})
+
 }
 
 func (n *Network) establishDialConnections() error {
