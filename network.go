@@ -143,7 +143,18 @@ type pairwiseConnection struct {
 
 // Init implements the Mpi init function
 func (n *Network) Init() error {
-	// First, deal with flags
+	n.setFields()
+	err := n.setRanks()
+	if err != nil {
+		return err
+	}
+
+	return n.startConnections()
+}
+
+// setFields sets the fields of the network struct from flags if they were not
+// set with a value that was registered
+func (n *Network) setFields() {
 	if n.NetProto == "" {
 		n.NetProto = FlagProtocol
 	}
@@ -162,10 +173,12 @@ func (n *Network) Init() error {
 			n.Addrs[i] = str
 		}
 	}
-
 	n.hashedPassword = n.Password // TODO: Fix
+}
 
-	// Sort all of the IPs to ensure that all processors agree
+func (n *Network) setRanks() error {
+	// Sort all of the IPs to ensure that all processors agree on the node
+	// number of each adress
 	sort.Strings(n.Addrs)
 
 	// Make sure all of the IP addresses are unique
@@ -184,8 +197,7 @@ func (n *Network) Init() error {
 	}
 
 	n.nNodes = len(n.Addrs)
-
-	return n.startConnections()
+	return nil
 }
 
 func (n *Network) startConnections() error {
@@ -244,7 +256,7 @@ type listConn struct {
 
 // establishListenConnections listens for all of the other nodes
 func (n *Network) establishListenConnections() error {
-	// Listen on the local IP address
+	// Listen on the local IP address for calls from the other processes
 	listener, err := net.Listen(n.NetProto, n.Addr)
 	if err != nil {
 		return errors.New("error listening: " + err.Error())
