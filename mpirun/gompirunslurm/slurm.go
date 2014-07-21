@@ -2,7 +2,8 @@
 Launches MPI tasks within a slurm environment. To use, first allocate nodes with
 salloc, and then call
 gompirunslurm ncores programname otherargs. For example,
-salloc -N6 gompirunslurm 12 helloworld
+salloc -N6 -c12
+gompirunslurm 12 helloworld
 
 Note that this syntax differs than that for gompirun. Number of cores here is the
 number of cores per distributed process (not the number of processes).
@@ -95,7 +96,7 @@ func main() {
 		go func(i int) {
 			defer wg.Done()
 			args := []string{"-N", "1", "-n", "1", "-c", strconv.Itoa(nCores), "--nodelist", nodelist[i], programName}
-			for i := 2; i < len(os.Args); i++ {
+			for i := 3; i < len(os.Args); i++ {
 				args = append(args, os.Args[i])
 			}
 
