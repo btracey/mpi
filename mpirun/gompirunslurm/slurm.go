@@ -1,10 +1,18 @@
-// Launches tasks from a slurm environment. Used with salloc
-// use salloc -N
-// currently assumes full nodes. Would need a config script otherwise
+/*
+Launches MPI tasks within a slurm environment. To use, first allocate nodes with
+salloc, and then call
+gompirunslurm ncores programname otherargs. For example,
+salloc -N6 gompirunslurm 12 helloworld
+
+Note that this syntax differs than that for gompirun. Number of cores here is the
+number of cores per distributed process (not the number of processes).
+
+gompirunslurm uses srun to launch the scripts within the allocation, one per
+allocated node.
+*/
 package main
 
 import (
-	"flag"
 	"log"
 	"os"
 	"os/exec"
@@ -14,15 +22,15 @@ import (
 )
 
 func main() {
-	var nCores int
-	flag.IntVar(&nCores, "c", 0, "number of cores to use")
-	flag.Parse()
-	if nCores == 0 {
-		log.Fatal("c set to 0")
+	if len(os.Args) < 3 {
+		log.Fatal("mpirun_slurm must be called with the number of cores and the program name")
 	}
-
-	if len(os.Args) == 1 {
-		log.Fatal("mpirun_slurm must be called with the program name")
+	nCores, err := strconv.Atoi(os.Args[1])
+	if err != nil {
+		log.Fatal(err)
+	}
+	if nCores < 1 {
+		log.Fatal("Must have more than one core")
 	}
 
 	nodelistStr := os.Getenv("SLURM_JOB_NODELIST")
