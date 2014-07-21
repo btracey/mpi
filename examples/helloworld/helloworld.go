@@ -9,9 +9,14 @@ go get github.com/btracey/mpi
 go install github.com/btracey/mpi/examples/helloworld
 
 Then, in three different terminals, run one each of
-	helloworld -mpi-addr=":5000" -mpi-alladdr=":5000,:5001,:5003"
-	helloworld -mpi-addr=":5001" -mpi-alladdr=":5000,:5001,:5003"
-	helloworld -mpi-addr=":5003" -mpi-alladdr=":5000,:5001,:5003"
+	helloworld -mpi-addr=":5000" -mpi-alladdr=":5000,:5001,:5002"
+	helloworld -mpi-addr=":5001" -mpi-alladdr=":5000,:5001,:5002"
+	helloworld -mpi-addr=":5002" -mpi-alladdr=":5000,:5001,:5002"
+
+Or, to shortcut the above, one may
+	go install github.com/btracey/mpi/mpirun/gompirun
+	gompirun N helloworld.go
+where N is any positive integer (though large values of N may not work)
 */
 package main
 
@@ -53,8 +58,7 @@ func main() {
 			defer wg.Done()
 			str := fmt.Sprintf("\"Hello node %v, I'm node %v\"", i, rank)
 			if i == rank {
-				return // TODO: Fix self-send bug
-				str = "\"I'm just talking to myself\""
+				str = fmt.Sprintf("\"I'm just node %d talking to myself\"", rank)
 			}
 			err := mpi.Send(str, i, 0)
 			if err != nil {
@@ -66,9 +70,6 @@ func main() {
 	for i := 0; i < size; i++ {
 		go func(i int) {
 			defer wg.Done()
-			if i == rank {
-				return // TODO: Fix self-send bug
-			}
 			var str string
 			err := mpi.Receive(&str, i, 0)
 			if err != nil {
