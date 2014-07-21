@@ -35,7 +35,7 @@ type Network struct {
 	nNodes int // total number of processes
 
 	connections []*pairwiseConnection // connections to all of the other nodes
-	local       *localConnection
+	local       *local
 }
 
 func (n *Network) Rank() int {
@@ -123,11 +123,7 @@ func (n *Network) startConnections() error {
 		}
 	}
 
-	n.local = &localConnection{
-		manager:    newTagManager(),
-		storedData: make(map[int][]byte),
-		mux:        &sync.Mutex{},
-	}
+	n.local = newLocal()
 
 	var listenError error
 	var dialError error
@@ -366,35 +362,81 @@ func (n *Network) close() {
 	}
 }
 
-type localConnection struct {
-	manager    *tagManager
-	storedData map[int][]byte
-	mux        *sync.Mutex
+/*
+	Issue with sending locally:
+	In the distributed framework, we know exactly one of Send or Receive is
+	called. If a tag is registered twice, it is a bug. This is not true locally.
+	Send and receive are both be called exactly once in correct programs.
+	Aditionally, in correct programs, send and receive are called concurrently
+	and thus there are no guarantees about their order. Additionally, by the
+	MPI spec, Send must wait until the receive is done.
+
+	The implementation is as follows. Whichever of Send/Receive arrives first
+	creates the communication channel and logs that it was the creator. It then
+	establishes its half of the communication. Whichever arrives second observes
+	that the channel is there and provides the second link for the communication.
+	Finally, once the communication is complete, the sender will delete the entry
+	from the map so that the tag can be reused.
+*/
+
+type localsend struct {
+	c      chan []byte
+	create creator
 }
 
-func (l *localConnection) AddBytes(tag int, b []byte) error {
-	l.manager.Register(tag)
-	l.mux.Lock()
-	l.storedData[tag] = b
-	l.mux.Unlock()
-	return nil
+type creator int
+
+const (
+	notcreated = iota
+	sendcreate
+	receivecreate
+)
+
+type local struct {
+	mux   *sync.Mutex
+	sends map[int]localsend
 }
 
-func (l *localConnection) Bytes(tag int) ([]byte, error) {
-	l.mux.Lock()
-	b, ok := l.storedData[tag]
-	l.mux.Unlock()
-	if !ok {
-		return nil, errors.New("Unknown tag")
+func newLocal() *local {
+	return &local{
+		mux:   &sync.Mutex{},
+		sends: make(map[int]localsend),
 	}
-	return b, nil
 }
 
-func (l *localConnection) Delete(tag int) {
-	l.manager.Delete(tag)
+func (l *local) Send(tag int, b []byte) {
 	l.mux.Lock()
-	delete(l.storedData, tag)
+	s, ok := l.sends[tag]
+	if ok && s.create == sendcreate {
+		panic(fmt.Sprintf("tag %d created twice by sender locally", tag))
+	}
+	if !ok {
+		l.sends[tag] = localsend{
+			c:      make(chan []byte),
+			create: sendcreate,
+		}
+	}
 	l.mux.Unlock()
+	l.sends[tag].c <- b
+	l.mux.Lock()
+	delete(l.sends, tag)
+	l.mux.Unlock()
+}
+
+func (l *local) Receive(tag int) []byte {
+	l.mux.Lock()
+	s, ok := l.sends[tag]
+	if ok && s.create == receivecreate {
+		panic(fmt.Sprintf("tag %d created twice by receiver locally", tag))
+	}
+	if !ok {
+		l.sends[tag] = localsend{
+			c:      make(chan []byte),
+			create: receivecreate,
+		}
+	}
+	l.mux.Unlock()
+	return <-l.sends[tag].c
 }
 
 // tagManager is used to manage tagged messages
@@ -494,7 +536,7 @@ func (n *Network) Send(data interface{}, destination, tag int) error {
 
 	// special case if sending locally
 	if destination == n.myrank {
-		n.local.AddBytes(tag, buf.Bytes())
+		n.local.Send(tag, buf.Bytes())
 		return nil
 	}
 
@@ -531,15 +573,7 @@ func (n *Network) Receive(data interface{}, source, tag int) error {
 
 	var b []byte
 	if source == n.myrank {
-		// Get the stored byte list and send a completion signal
-		var err error
-		b, err = n.local.Bytes(tag)
-		if err != nil {
-			panic(err)
-		}
-		go func(tag int) {
-			n.local.manager.Channel(tag) <- []byte{}
-		}(tag)
+		b = n.local.Receive(tag)
 	} else {
 		manager.Register(tag)
 
@@ -562,10 +596,10 @@ func (n *Network) Receive(data interface{}, source, tag int) error {
 
 // receiveReader reads from the connection and returns a data value to the
 // appropriate tag
+// TODO: remove panic
 func (n *Network) receiveReader(source int) {
 	var m message
-	decoder := gob.NewDecoder(n.connections[source].listen)
-	err := decoder.Decode(&m)
+	err := gob.NewDecoder(n.connections[source].listen).Decode(&m)
 	if err != nil {
 		panic(err)
 	}
