@@ -32,6 +32,7 @@ func main() {
 	if nCores < 1 {
 		log.Fatal("Must have more than one core")
 	}
+	programName := os.Args[2]
 
 	nodelistStr := os.Getenv("SLURM_JOB_NODELIST")
 	nodelistFancy := strings.Split(nodelistStr, " ")
@@ -93,7 +94,7 @@ func main() {
 	for i := range nodelist {
 		go func(i int) {
 			defer wg.Done()
-			args := []string{"-N", "1", "-n", "1", "-c", strconv.Itoa(nCores), "--nodelist", nodelist[i], os.Args[1]}
+			args := []string{"-N", "1", "-n", "1", "-c", strconv.Itoa(nCores), "--nodelist", nodelist[i], programName}
 			for i := 2; i < len(os.Args); i++ {
 				args = append(args, os.Args[i])
 			}
