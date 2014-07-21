@@ -34,6 +34,10 @@ func main() {
 		log.Fatal("error parsing nNodes: ", err)
 	}
 
+	if nNodes < 1 {
+		log.Fatal("number of nodes must be positive")
+	}
+
 	execName := os.Args[2]
 
 	otherArgs := os.Args[3:]
