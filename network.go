@@ -481,9 +481,9 @@ func (n *Network) Send(data interface{}, destination, tag int) error {
 		the tag, the tagManager also creates a communication channel to do the
 		forwarding once the tag is observed.
 	*/
-
+	manager := n.connections[destination].sendtags
 	// register the tag for this message
-	n.connections[destination].sendtags.Register(tag)
+	manager.Register(tag)
 
 	// serialize the data into a []byte
 	var buf bytes.Buffer
@@ -499,7 +499,15 @@ func (n *Network) Send(data interface{}, destination, tag int) error {
 	}
 
 	// Launch a reader for the reply message from the destination
-	go n.confirmationReader(destination)
+	go func() {
+		var m message
+		err := gob.NewDecoder(n.connections[destination].dial).Decode(&m)
+		if err != nil {
+			panic(err) // There should never be a send over the connection that isn't a message
+		}
+
+		manager.Channel(m.Tag) <- m.Bytes
+	}()
 
 	// send the data over the connection.
 	enc := gob.NewEncoder(n.connections[destination].dial)
@@ -509,24 +517,12 @@ func (n *Network) Send(data interface{}, destination, tag int) error {
 	}
 
 	// Wait for the confirmation message and then delete the tag
-	<-n.connections[destination].sendtags.Channel(tag)
-	n.connections[destination].sendtags.Delete(tag)
+	<-manager.Channel(tag)
+	manager.Delete(tag)
 	return nil
 }
 
-// confirmationReader reads a reply from the send channel and forwards the data
-// to the appropriate channel.
-func (n *Network) confirmationReader(destination int) {
-	var m message
-	err := gob.NewDecoder(n.connections[destination].dial).Decode(&m)
-	if err != nil {
-		panic(err) // There should never be a send over the connection that isn't a message
-	}
-
-	n.connections[destination].sendtags.Channel(m.Tag) <- m.Bytes
-}
-
-// Receive implements the Mpi function
+// Receive implements the Mpi function. Receive uses gob to decode the data.
 func (n *Network) Receive(data interface{}, source, tag int) error {
 	// Receive adds the tag to the map, launches a goroutine to listen for the
 	// reply, and deserializes the data when it comes
