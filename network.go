@@ -52,6 +52,10 @@ func (n *Network) Size() int {
 // Init implements the Mpi init function
 func (n *Network) Init() error {
 	n.setFields()
+	if len(n.Addrs) == 0 {
+		n.Addr = ":5000"
+		n.Addrs = []string{":5000"}
+	}
 	err := n.assignRanks()
 	if err != nil {
 		return err
