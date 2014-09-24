@@ -17,6 +17,8 @@ Then, in four different terminals, run one each of
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"log"
@@ -24,15 +26,15 @@ import (
 	"time"
 
 	"github.com/btracey/mpi"
-	"github.com/gonum/floats"
 )
 
 // length of message. Must be in increasing order
-var msgLengths = []int{0, 1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6}
+var msgLengths = []int{0, 1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7}
 
 var nRepeats int64 = 50
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
 	flag.Parse()
 
 	// Initialize MPI
@@ -57,13 +59,16 @@ func main() {
 		fmt.Println("Number of nodes = ", size)
 	}
 
-	// Make a random vector of floats to be used as a message.
+	// Make a random vector of bytes
 	maxsize := msgLengths[len(msgLengths)-1]
-	message := make([]float64, maxsize)
-	for i := range message {
-		message[i] = rand.Float64()
+	message := make([]byte, maxsize)
+	//fmt.Println("...")
+	for i := 0; i < maxsize/8; i++ {
+		v := rand.Int63()
+		binary.LittleEndian.PutUint64(message[i*8:], uint64(v))
 	}
-	receive := make([]float64, maxsize)
+
+	receive := make([]byte, maxsize)
 
 	// Do a call and response between the even and the odd nodes
 	// and record the time. The even nodes will send a message to the next
@@ -92,7 +97,12 @@ func main() {
 
 			// verify that the received message is the same as the sent message
 			if evenRank {
-				if !floats.Equal(msg, rcv) {
+				/*
+					if !floats.Equal(msg, rcv) {
+						log.Fatal("message not the same")
+					}
+				*/
+				if !bytes.Equal(msg, rcv) {
 					log.Fatal("message not the same")
 				}
 			}

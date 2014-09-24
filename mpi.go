@@ -70,6 +70,10 @@ var (
 	isAllReducer bool
 )
 
+// Raw is a type which specifies the type should be sent as a raw []byte rather
+// than going through any encoding
+type Raw []byte
+
 // Init initializes the communication network. Init must be called before any
 // other functions are called, and should only be called once during program
 // execution

@@ -508,6 +508,7 @@ type pairwiseConnection struct {
 // when deserializing
 type message struct {
 	Tag   int
+	Israw bool // flag if it's raw bytes
 	Bytes []byte
 }
 
@@ -533,6 +534,7 @@ func (n *Network) Send(data interface{}, destination, tag int) error {
 
 	// serialize the data into a []byte
 	var buf bytes.Buffer
+
 	err := gob.NewEncoder(&buf).Encode(data)
 	if err != nil {
 		return err
