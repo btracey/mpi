@@ -51,7 +51,7 @@ func (n *Network) Size() int {
 
 // Init implements the Mpi init function
 func (n *Network) Init() error {
-	n.setFields()
+	n.useFlags()
 	if len(n.Addrs) == 0 {
 		n.Addr = ":5000"
 		n.Addrs = []string{":5000"}
@@ -64,9 +64,9 @@ func (n *Network) Init() error {
 	return n.startConnections()
 }
 
-// setFields sets the fields of the network struct from flags if they were not
+// useFlags sets the fields of the network struct from flags if they were not
 // set with a value that was registered
-func (n *Network) setFields() {
+func (n *Network) useFlags() {
 	if n.NetProto == "" {
 		n.NetProto = FlagProtocol
 	}
@@ -169,10 +169,10 @@ func (n *Network) establishListenConnections() error {
 	connErr := make([]error, n.nNodes)
 	wg := &sync.WaitGroup{}
 
-	wg.Add(n.nNodes - 1)
+	wg.Add(n.nNodes - 1) // Don't listen to yourself
 	for i := 0; i < n.nNodes; i++ {
 		if i == n.myrank {
-			continue // Don't listen to yourself
+			continue
 		}
 		go func(i int) {
 			defer wg.Done()
@@ -205,8 +205,8 @@ type listConn struct {
 }
 
 // listenHandshake accepts an incoming message from another node in the network
-// and responds that the message was received. There is a timeout of the user
-// requested one
+// and responds that the message was received. There is a timeout if the user
+// requested one.
 func (n *Network) listenHandshake(listener net.Listener) error {
 
 	acceptChan := make(chan listConn)
@@ -236,6 +236,7 @@ func (n *Network) listenHandshake(listener net.Listener) error {
 		return list.err
 	}
 
+	// Now that the connection is established, listen for a message from the caller.
 	conn := list.conn
 	decoder := gob.NewDecoder(conn)
 
@@ -264,10 +265,10 @@ func (n *Network) establishDialConnections() error {
 	// Each program also dials every other program
 	connErr := make([]error, n.nNodes)
 	wg := &sync.WaitGroup{}
-	wg.Add(n.nNodes - 1)
+	wg.Add(n.nNodes - 1) // Don't dial yourself
 	for i := 0; i < n.nNodes; i++ {
 		if i == n.myrank {
-			continue // Don't dial yourself
+			continue
 		}
 		go func(i int) {
 			defer wg.Done()
@@ -508,8 +509,7 @@ type pairwiseConnection struct {
 // when deserializing
 type message struct {
 	Tag   int
-	Israw bool // flag if it's raw bytes
-	Bytes []byte
+	Bytes Raw
 }
 
 // Send implements mpi.Interface.Send. Network uses the encoding/gob package to
