@@ -76,6 +76,7 @@ func (n *Network) useFlags() {
 	if n.Timeout == 0 {
 		n.Timeout = time.Duration(FlagInitTimeout)
 	}
+
 	if n.Addr == "" {
 		n.Addr = FlagAddr
 	}
