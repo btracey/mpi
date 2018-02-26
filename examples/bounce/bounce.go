@@ -26,12 +26,13 @@ import (
 	"time"
 
 	"github.com/btracey/mpi"
+	"github.com/gonum/floats"
 )
 
 // length of message. Must be in increasing order
 var msgLengths = []int{0, 1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7}
 
-var nRepeats int64 = 50
+var nRepeats int64 = 10
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
@@ -67,41 +68,40 @@ func main() {
 		v := rand.Int63()
 		binary.LittleEndian.PutUint64(message[i*8:], uint64(v))
 	}
-
 	receive := make([]byte, maxsize)
+
+	messageFloats := make([]float64, maxsize/8)
+	for i := 0; i < maxsize/8; i++ {
+		messageFloats[i] = rand.Float64()
+	}
+	receiveFloats := make([]float64, maxsize/8)
 
 	// Do a call and response between the even and the odd nodes
 	// and record the time. The even nodes will send a message to the next
 	// node. The odd nodes will send that message back, which will be received
 	// by the even node.
 	times := make([]int64, len(msgLengths))
+	timesF := make([]int64, len(msgLengths))
 	for i, l := range msgLengths {
 		for j := int64(0); j < nRepeats; j++ {
+			// Send the byte message
 			msg := message[:l]
 			rcv := receive[:l]
 			start := time.Now()
-
 			if evenRank {
 				mpi.Send(msg, rank+1, 0)
 			} else {
 				mpi.Receive(&rcv, rank-1, 0)
 			}
-
 			if evenRank {
 				mpi.Receive(&rcv, rank+1, 0)
 			} else {
 				mpi.Send(rcv, rank-1, 0)
 			}
-
 			times[i] += time.Since(start).Nanoseconds()
 
 			// verify that the received message is the same as the sent message
 			if evenRank {
-				/*
-					if !floats.Equal(msg, rcv) {
-						log.Fatal("message not the same")
-					}
-				*/
 				if !bytes.Equal(msg, rcv) {
 					log.Fatal("message not the same")
 				}
@@ -110,6 +110,30 @@ func main() {
 			for i := range rcv {
 				rcv[i] = 0
 			}
+
+			// Send the float64 message
+			msgF := messageFloats[:l/8]
+			rcvF := receiveFloats[:l/8]
+			start = time.Now()
+
+			if evenRank {
+				mpi.Send(msgF, rank+1, 0)
+			} else {
+				mpi.Receive(&rcvF, rank-1, 0)
+			}
+			if evenRank {
+				mpi.Receive(&rcvF, rank+1, 0)
+			} else {
+				mpi.Send(rcvF, rank-1, 0)
+			}
+			timesF[i] += time.Since(start).Nanoseconds()
+
+			// verify that the received message is the same as the sent message
+			if evenRank {
+				if !floats.Equal(msgF, rcvF) {
+					log.Fatal("message not the same")
+				}
+			}
 		}
 	}
 
@@ -117,10 +141,13 @@ func main() {
 	for i := range times {
 		times[i] /= time.Microsecond.Nanoseconds()
 		times[i] /= nRepeats
+		timesF[i] /= time.Microsecond.Nanoseconds()
+		timesF[i] /= nRepeats
 	}
 
 	// Have the even nodes print their trip time in microseconds
 	if evenRank {
-		fmt.Printf("Average trip time in µs between node %d and %d: %v\n", rank, rank+1, times)
+		fmt.Printf("Average byte trip time in µs between node %d and %d: %v\n", rank, rank+1, times)
+		fmt.Printf("Average float64 trip time in µs between node %d and %d: %v\n", rank, rank+1, timesF)
 	}
 }

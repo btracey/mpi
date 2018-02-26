@@ -74,6 +74,22 @@ var (
 // than going through any encoding
 type Raw []byte
 
+func (r Raw) GobEncode() ([]byte, error) {
+	b := make([]byte, len(r))
+	copy(b, r)
+	return b, nil
+}
+
+func (r *Raw) GobDecode(b []byte) error {
+	if len(*r) < len(b) {
+		*r = make([]byte, len(b))
+	} else {
+		*r = (*r)[:len(b)]
+	}
+	copy(*r, b)
+	return nil
+}
+
 // Init initializes the communication network. Init must be called before any
 // other functions are called, and should only be called once during program
 // execution

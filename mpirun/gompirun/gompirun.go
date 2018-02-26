@@ -43,7 +43,7 @@ func main() {
 	otherArgs := os.Args[3:]
 
 	// Use local host ports
-	baseport := 5000
+	baseport := 6000
 	var ports []string
 	for i := 0; i < nNodes; i++ {
 		portName := ":" + strconv.Itoa(baseport+i)
@@ -75,6 +75,13 @@ func launch(execName string, ports []string, args []string) {
 				a = append(a, v)
 			}
 			a = append(a, "-mpi-addr", port, "-mpi-alladdr", portlist)
+
+			/*
+				fmt.Println("gompirun: ", execName)
+				for i := range a {
+					fmt.Println(a[i])
+				}
+			*/
 			cmd := exec.Command(execName, a...)
 			cmd.Stdin = os.Stdin
 			cmd.Stdout = os.Stdout
